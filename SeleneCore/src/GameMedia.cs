@@ -427,6 +427,7 @@ namespace Selene
 
         // the selected game's screenshots as they are now, and the viewer from outside (the details page's band)
         public static List<ShotItem> Current { get { return current; } }
+        public static Guid Shown { get { return shown; } }
         public static bool ViewerOpen { get { return viewer != null; } }
         public static void OpenViewerAt(int index) { if (index >= 0 && index < current.Count) OpenViewer(current, index, System.Windows.Input.Keyboard.FocusedElement); }
 

@@ -32,7 +32,7 @@ namespace Selene
         public static void FocusBand() { if (sink != null) sink.Focus(); }
         private static Guid shownId;
         private static DispatcherTimer shotsWatch;
-        private static int shotsSeen;
+        private static List<ShotItem> shotsSeen;
 
         public static void Attach(Window w)
         {
@@ -99,7 +99,7 @@ namespace Selene
                 var activity = Part<Border>("SeleneDetailsBand2b");
                 if (activity != null && activity.Child != null && activity.Child.CacheMode == null) activity.Child.CacheMode = new System.Windows.Media.BitmapCache { RenderAtScale = 1, SnapsToDevicePixels = true };
                 if (shownId != g.Id || zone == 0) { zone = 0; if (shift != null) { shift.BeginAnimation(TranslateTransform.YProperty, null); shift.Y = 0; } }
-                if (shownId != g.Id) GameMedia.OnSelected(g, null);   // the screenshots follow Spotlight's row; here the game may be another (Collection's pick)
+                if (GameMedia.Shown != g.Id) GameMedia.OnSelected(g, null);   // the screenshots follow Spotlight's row; here the game may be another (Collection's pick)
                 shownId = g.Id;
                 Fill(g);
                 Blur(false);
@@ -178,8 +178,9 @@ namespace Selene
             FillMore(g);
             ShowFocus();
             // the screenshots arrive a moment after the selection: looked at again for a while
-            shotsSeen = GameMedia.Current.Count;
-            if (shotsWatch == null) { shotsWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) }; shotsWatch.Tick += (s, e) => { if (details == null || !details.IsVisible) { shotsWatch.Stop(); return; } if (GameMedia.Current.Count != shotsSeen) { shotsSeen = GameMedia.Current.Count; FillShots(); ShowFocus(); } }; }
+            // a new list, not a new count: another game's cached list can have the same count
+            shotsSeen = GameMedia.Current;
+            if (shotsWatch == null) { shotsWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) }; shotsWatch.Tick += (s, e) => { if (details == null || !details.IsVisible) { shotsWatch.Stop(); return; } if (!ReferenceEquals(GameMedia.Current, shotsSeen)) { shotsSeen = GameMedia.Current; FillShots(); ShowFocus(); } }; }
             shotsWatch.Stop();
             shotsWatch.Start();
         }
@@ -195,7 +196,8 @@ namespace Selene
             var panel = Part<StackPanel>("SeleneDetailsShots");
             if (panel == null) return;
             panel.Children.Clear(); tiles[0].Clear(); opens[0].Clear();
-            var shots = GameMedia.Current.Take(6).ToList();
+            // until this game's load lands, Current is still the previous game's
+            var shots = GameMedia.Shown == shownId ? GameMedia.Current.Take(6).ToList() : new List<ShotItem>();
             for (int i = 0; i < shots.Count; i++)
             {
                 var t = new Tile(272, 153, 12, 5) { FocusScale = 1.05 };
