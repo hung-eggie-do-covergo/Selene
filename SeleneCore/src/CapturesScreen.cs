@@ -27,7 +27,8 @@ namespace Selene
         private const int Columns = 5, Visible = 3, MaxItems = 150;
         private static readonly string[] ImageExt = { ".jpg", ".jpeg", ".png", ".bmp" };
         private static readonly string[] VideoExt = { ".mp4", ".mov", ".mkv", ".avi", ".wmv" };
-        private static readonly Regex DateTail = new Regex(@"\s*[\d]{4}[.\-_][\d]{2}[.\-_][\d]{2}.*$");
+        // Game Bar dates follow the system's short date: "2026-10-23 15-39-06", or "10_23_2026 3_39_06 PM"
+        private static readonly Regex DateTail = new Regex(@"\s*([\d]{4}[.\-_][\d]{2}[.\-_][\d]{2}|[\d]{1,2}_[\d]{1,2}_[\d]{4}\b).*$");
 
         private static readonly string[] Filters = { "All", "Screenshots", "Clips" };
         private static int filter;   // remembered while Playnite runs
@@ -839,7 +840,7 @@ namespace Selene
                     foreach (var dir in Directory.GetDirectories(videos))
                     {
                         var n = Path.GetFileName(dir);
-                        if (n.Equals("Captures", StringComparison.OrdinalIgnoreCase) || n.Equals("NVIDIA", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (n.Equals("Captures", StringComparison.OrdinalIgnoreCase) || n.Equals("NVIDIA", StringComparison.OrdinalIgnoreCase) || Hidden(dir)) continue;
                         Add(list, Directory.GetFiles(dir), n);
                     }
             }
@@ -857,9 +858,45 @@ namespace Selene
                 if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return;
                 Add(list, Directory.GetFiles(folder), name);
                 if (!subfolders) return;
-                foreach (var dir in Directory.GetDirectories(folder)) Add(list, Directory.GetFiles(dir), Path.GetFileName(dir));
+                foreach (var dir in Directory.GetDirectories(folder)) if (!Hidden(dir)) Add(list, Directory.GetFiles(dir), Path.GetFileName(dir));
             }
             catch (Exception ex) { HomeNav.Log("captures: " + folder + ": " + ex.Message); }
+        }
+
+        // a network share's $RECYCLE.BIN and other hidden folders are not sources
+        private static bool Hidden(string dir)
+        {
+            try { return Path.GetFileName(dir).StartsWith("$") || (File.GetAttributes(dir) & FileAttributes.Hidden) != 0; }
+            catch { return true; }
+        }
+
+        // Game Bar swaps or drops the characters Windows forbids ("Onimusha: Way" is "Onimusha_ Way"): letters and digits only
+        public static string NameKey(string name)
+        {
+            return Regex.Replace((name ?? "").ToLowerInvariant(), @"[^\p{L}\p{N}]", "");
+        }
+
+        // ScreenshotsVisualizer's index of a game (its folders and per-game overrides) as file names; null without one
+        public static HashSet<string> Indexed(Guid gameId)
+        {
+            try
+            {
+                if (HomeNav.Api == null) return null;
+                var file = Path.Combine(HomeNav.Api.Paths.ExtensionsDataPath, "c6c8276f-91bf-48e5-a1d1-4bee0b493488", "ScreenshotsVisualizer", gameId + ".json");
+                if (!File.Exists(file)) return null;
+                var root = new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength = int.MaxValue }.Deserialize<Dictionary<string, object>>(File.ReadAllText(file));
+                object items;
+                if (root == null || !root.TryGetValue("Items", out items) || !(items is System.Collections.IEnumerable)) return null;
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in (System.Collections.IEnumerable)items)
+                {
+                    var d = item as Dictionary<string, object>;
+                    object f;
+                    if (d != null && d.TryGetValue("FileName", out f) && f is string) names.Add(Path.GetFileName((string)f));
+                }
+                return names;
+            }
+            catch (Exception ex) { HomeNav.Log("captures: ScreenshotsVisualizer index: " + ex.Message); return null; }
         }
 
         private static void Add(List<Capture> list, string[] files, string name)

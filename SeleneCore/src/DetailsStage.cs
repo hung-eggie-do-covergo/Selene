@@ -217,7 +217,9 @@ namespace Selene
             var note = Part<TextBlock>("SeleneDetailsCapturesNote");
             if (panel == null) return;
             panel.Children.Clear(); tiles[1].Clear(); opens[1].Clear();
-            var mine = CapturesScreen.Known.Where(c => string.Equals(c.Game, g.Name, StringComparison.OrdinalIgnoreCase)).Take(4).ToList();
+            var key = CapturesScreen.NameKey(g.Name);
+            var indexed = CapturesScreen.Indexed(g.Id);
+            var mine = CapturesScreen.Known.Where(c => CapturesScreen.NameKey(c.Game) == key || (indexed != null && indexed.Contains(System.IO.Path.GetFileName(c.Path)))).Take(4).ToList();
             if (note != null) note.Visibility = Visibility.Collapsed;
             if (mine.Count == 0)
             {
